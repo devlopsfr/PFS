@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Clients — Suivi Budgétaire{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Clients</h1>
+
+<div class="card mb-4">
+  <div class="card-header">Nouveau client</div>
+  <div class="card-body">
+    <form method="post" class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label small mb-1">Nom du client *</label>
+        <input name="name" class="form-control form-control-sm" required>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-primary btn-sm">Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if clients %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Nom</th><th class="text-end">Projets</th>
+          <th class="text-end">Budget</th><th class="text-end">Consommé</th><th class="text-end">Solde</th>
+          <th class="text-end">Consommé €</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clients %}
+        <tr>
+          <td><a href="{{ url_for('projects', client_id=c.id) }}" class="fw-semibold">{{ c.name }}</a></td>
+          <td class="text-end">{{ c.projects|length }}</td>
+          <td class="text-end">{{ c.budget_uo }} j</td>
+          <td class="text-end">{{ c.consumed_uo }} j</td>
+          <td class="text-end {{ 'text-danger fw-bold' if c.balance_uo < 0 else 'text-success' }}">{{ c.balance_uo }} j</td>
+          <td class="text-end">{{ "%.0f"|format(c.consumed_eur) }} €</td>
+          <td class="text-end">
+            <form method="post" action="{{ url_for('delete_client', client_id=c.id) }}"
+                  onsubmit="return confirm('Supprimer ce client ?')">
+              <button class="btn btn-outline-danger btn-sm">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<p class="text-muted">Aucun client pour l'instant.</p>
+{% endif %}
+{% endblock %}

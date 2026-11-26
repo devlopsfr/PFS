@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Import Excel — Suivi Budgétaire{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Importer un fichier Excel</h1>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Fichier de suivi (.xlsx)</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label">Fichier Excel</label>
+            <input type="file" name="file" accept=".xlsx" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nom du client</label>
+            <input name="client_name" class="form-control" placeholder="Laisser vide : déduit du nom du fichier (ex. THALES)">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Taux journalier par défaut (€/j)</label>
+            <input type="number" step="0.01" name="default_rate" class="form-control" value="825">
+            <div class="form-text">Utilisé pour les lignes sans taux explicite. Modifiable ensuite projet par projet.</div>
+          </div>
+          <button class="btn btn-primary">Importer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card bg-light border-0">
+      <div class="card-body">
+        <h2 class="h6">Format reconnu</h2>
+        <p class="small mb-2">L'import lit vos feuilles existantes et reconnaît :</p>
+        <ul class="small text-muted mb-0">
+          <li>les blocs avec en-têtes <strong>N° PO / Code / Mission / UO</strong> et colonnes mensuelles,</li>
+          <li>les lignes de taux journalier (€) sous chaque projet,</li>
+          <li>les anciens formats à missions groupées par PO,</li>
+          <li>les doublons entre feuilles sont fusionnés (valeur maximale conservée par mois).</li>
+        </ul>
+        <p class="small text-muted mt-2 mb-0">Après import, tout reste modifiable dans l'application. Vérifiez les taux et budgets signalés.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
