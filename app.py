@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import tempfile
 from datetime import date
 
 from flask import (
@@ -280,12 +281,15 @@ def import_file():
     except ValueError:
         default_rate = 0
 
-    path = os.path.join("/tmp", secure_filename(file.filename))
+    path = os.path.join(tempfile.gettempdir(), secure_filename(file.filename))
     file.save(path)
     try:
         parsed = parse_workbook(path, default_rate=default_rate)
-    finally:
+    except Exception:
         os.remove(path)
+        flash("Impossible de lire ce fichier. Vérifiez qu'il s'agit bien d'une version du fichier Excel « Project Financial Sheet » (.xlsx).", "danger")
+        return redirect(url_for("import_form"))
+    os.remove(path)
 
     if not parsed:
         flash("Aucun projet détecté dans ce fichier.", "warning")
