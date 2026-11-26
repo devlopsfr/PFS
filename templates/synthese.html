@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Synthèse {{ client.name }} — Suivi Budgétaire{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="h3 mb-0">Synthèse — {{ client.name }}</h1>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="btn-group btn-group-sm">
+      {% for y in years %}
+      <a class="btn {{ 'btn-dark' if y == year else 'btn-outline-dark' }}"
+         href="{{ url_for('client_synthese', client_id=client.id, year=y) }}">{{ y }}</a>
+      {% endfor %}
+    </div>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('client_synthese_pdf', client_id=client.id, year=year) }}">
+      ⬇ Export PDF (1 page)
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-3">
+    <div class="synthese-wrap">
+      <div class="synthese-header">
+        <div class="synthese-title">Suivi des commandes / facturation — {{ client.name }}</div>
+        <div class="synthese-date">{{ today }}</div>
+        {% if client.logo_path %}
+        <img class="synthese-logo" src="{{ url_for('client_logo', client_id=client.id) }}" alt="Logo {{ client.name }}">
+        {% endif %}
+      </div>
+      <div class="synthese-note">=&gt; les lignes en rouge sont les dépassements de budget.</div>
+
+      <div class="table-responsive">
+        <table class="synthese-table">
+          <thead>
+            <tr>
+              <th class="col-po">N° PO</th>
+              <th class="col-code">Code</th>
+              <th class="col-mission">Mission / taux</th>
+              <th class="num">UO</th>
+              <th class="num">Consommé</th>
+              <th class="num">Solde</th>
+              {% for label in month_labels %}<th class="num col-month">{{ label }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for g in groups %}
+              {% for msn in g.missions %}
+              <tr class="{{ 'row-over' if msn.over }}">
+                <td class="fw-bold">{{ g.po_number if loop.first }}</td>
+                <td class="fw-bold">{{ g.code if loop.first }}</td>
+                <td>{{ msn.mission }}</td>
+                <td class="num">{{ msn.budget|fmt_fr }}</td>
+                <td class="num">{{ msn.consumed|fmt_fr }}</td>
+                <td class="num {{ 'text-danger' if msn.solde < 0 }}">{{ msn.solde|fmt_fr }}</td>
+                {% for days in msn.monthly %}
+                <td class="num {{ 'cell-days' if days }}">{{ days|fmt_fr if days else '' }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+              <tr class="row-group {{ 'row-over' if g.over }}">
+                <td colspan="2"></td>
+                <td class="fw-bold">Total PO</td>
+                <td class="num fw-bold">{{ g.budget|fmt_fr }}</td>
+                <td class="num fw-bold">{{ g.consumed|fmt_fr }}</td>
+                <td class="num fw-bold {{ 'text-danger' if g.solde < 0 }}">{{ g.solde|fmt_fr }}</td>
+                {% for days in g.monthly %}<td class="num fw-bold">{{ days|fmt_fr if days else '' }}</td>{% endfor %}
+              </tr>
+            {% endfor %}
+            <tr class="row-total">
+              <td colspan="2"></td>
+              <td class="fw-bold">TOTAL CLIENT</td>
+              <td class="num fw-bold">{{ totals.budget|fmt_fr }}</td>
+              <td class="num fw-bold">{{ totals.consumed|fmt_fr }}</td>
+              <td class="num fw-bold">{{ totals.solde|fmt_fr }}</td>
+              {% for days in totals.monthly %}<td class="num fw-bold">{{ days|fmt_fr if days else '' }}</td>{% endfor %}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="synthese-total-eur mt-2">
+        Total {{ year }} : {{ totals.consumed|fmt_fr }} j — {{ totals.consumed_eur|fmt_fr }} €
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

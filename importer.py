@@ -1,7 +1,34 @@
+import os
 import re
+import zipfile
 from datetime import datetime
 
 import openpyxl
+
+
+def extract_logo(xlsx_path, dest_dir, client_id):
+    try:
+        z = zipfile.ZipFile(xlsx_path)
+    except Exception:
+        return None
+    best = None
+    for name in z.namelist():
+        match = re.match(r"xl/media/.+\.(png|jpe?g)$", name, re.IGNORECASE)
+        if not match:
+            continue
+        try:
+            data = z.read(name)
+        except Exception:
+            continue
+        if best is None or len(data) > best[1]:
+            best = (data, len(data), match.group(1).lower())
+    if not best:
+        return None
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, f"client_{client_id}.{best[2]}")
+    with open(dest, "wb") as f:
+        f.write(best[0])
+    return dest
 
 
 def _clean(value):

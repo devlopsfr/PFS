@@ -8,6 +8,7 @@ class Client(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, unique=True)
+    logo_path = db.Column(db.String(255), nullable=True)
 
     projects = db.relationship(
         "Project", backref="client", lazy=True, cascade="all, delete-orphan"
