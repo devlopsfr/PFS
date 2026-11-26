@@ -1,8 +1,10 @@
+import io
 import os
 import re
 import sys
 import tempfile
 from datetime import date
+from itertools import groupby
 
 from flask import (
     Flask,
@@ -13,12 +15,13 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
-from importer import compatible, parse_workbook
+from importer import compatible, extract_logo, parse_workbook
 from models import Client, Entry, Project, db
 
 def resource_dir():
@@ -35,6 +38,7 @@ app = Flask(
     static_folder=os.path.join(resource_dir(), "static"),
 )
 os.makedirs(DATA_DIR, exist_ok=True)
+LOGO_DIR = os.path.join(DATA_DIR, "logos")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(DATA_DIR, "budget.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
@@ -43,6 +47,10 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 db.init_app(app)
 with app.app_context():
     db.create_all()
+    with db.engine.begin() as conn:
+        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(clients)")]
+        if "logo_path" not in cols:
+            conn.exec_driver_sql("ALTER TABLE clients ADD COLUMN logo_path VARCHAR(255)")
 
 MONTHS_FR = ["janv.", "févr.", "mars", "avr.", "mai", "juin",
              "juil.", "août", "sept.", "oct.", "nov.", "déc."]
@@ -152,6 +160,123 @@ def delete_client(client_id):
         db.session.commit()
         flash(f"Client « {client.name} » supprimé.", "success")
     return redirect(url_for("clients"))
+
+
+def _fmt_fr(v):
+    v = round(v or 0, 2)
+    if v == int(v):
+        return str(int(v))
+    return f"{v:,.2f}".rstrip("0").rstrip(".").replace(",", " ").replace(".", ",")
+
+
+app.jinja_env.filters["fmt_fr"] = _fmt_fr
+
+
+def synthese_data(client, year):
+    months = [date(year, m, 1) for m in range(1, 13)]
+    ordered = sorted(
+        client.projects,
+        key=lambda p: ((p.po_number or "").strip(), (p.code or "").strip(), p.mission),
+    )
+    groups = []
+    for key, items in groupby(
+        ordered, key=lambda p: ((p.po_number or "").strip(), (p.code or "").strip())
+    ):
+        items = list(items)
+        missions = []
+        for p in items:
+            emap = {e.month: e.days or 0 for e in p.entries}
+            missions.append({
+                "po_number": p.po_number,
+                "code": p.code,
+                "mission": p.mission,
+                "budget": p.budget_uo or 0,
+                "consumed": p.consumed_uo,
+                "solde": p.balance_uo,
+                "monthly": [emap.get(m, 0) for m in months],
+                "over": p.balance_uo < 0,
+            })
+        solde = sum(m["solde"] for m in missions)
+        groups.append({
+            "po_number": key[0],
+            "code": key[1],
+            "budget": sum(m["budget"] for m in missions),
+            "consumed": sum(m["consumed"] for m in missions),
+            "solde": solde,
+            "monthly": [sum(m["monthly"][j] for m in missions) for j in range(12)],
+            "missions": missions,
+            "over": solde < 0,
+        })
+    totals = {
+        "budget": sum(g["budget"] for g in groups),
+        "consumed": sum(g["consumed"] for g in groups),
+        "solde": sum(g["solde"] for g in groups),
+        "monthly": [sum(g["monthly"][j] for g in groups) for j in range(12)],
+        "consumed_eur": sum(p.consumed_eur for p in client.projects),
+    }
+    return months, groups, totals
+
+
+@app.route("/clients/<int:client_id>/logo")
+def client_logo(client_id):
+    client = get_client(client_id)
+    if not client.logo_path or not os.path.exists(client.logo_path):
+        abort(404)
+    return send_file(client.logo_path)
+
+
+@app.route("/clients/<int:client_id>/logo", methods=["POST"])
+def upload_logo(client_id):
+    client = get_client(client_id)
+    file = request.files.get("logo")
+    if not file or not file.filename.lower().endswith((".png", ".jpg", ".jpeg")):
+        flash("Logo : merci de déposer une image PNG ou JPG.", "danger")
+        return redirect(url_for("clients"))
+    os.makedirs(LOGO_DIR, exist_ok=True)
+    ext = "png" if file.filename.lower().endswith(".png") else "jpg"
+    dest = os.path.join(LOGO_DIR, f"client_{client.id}.{ext}")
+    file.save(dest)
+    client.logo_path = dest
+    db.session.commit()
+    flash(f"Logo de « {client.name} » mis à jour.", "success")
+    return redirect(url_for("clients"))
+
+
+@app.route("/clients/<int:client_id>/synthese")
+def client_synthese(client_id):
+    client = get_client(client_id)
+    years = sorted({e.month.year for p in client.projects for e in p.entries}, reverse=True)
+    year = request.args.get("year", type=int) or (years[0] if years else date.today().year)
+    months, groups, totals = synthese_data(client, year)
+    month_labels = [f"{MONTHS_FR[m.month - 1]} {str(m.year)[2:]}" for m in months]
+    return render_template(
+        "synthese.html",
+        client=client,
+        year=year,
+        years=years,
+        month_labels=month_labels,
+        groups=groups,
+        totals=totals,
+        today=date.today().strftime("%d/%m/%Y"),
+    )
+
+
+@app.route("/clients/<int:client_id>/synthese.pdf")
+def client_synthese_pdf(client_id):
+    client = get_client(client_id)
+    year = request.args.get("year", type=int) or date.today().year
+    months, groups, totals = synthese_data(client, year)
+    from pdf_synthese import build_synthese_pdf
+    pdf = build_synthese_pdf(client, groups, totals, year, date.today().strftime("%d/%m/%Y"))
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=synthese-{client.id}-{year}.pdf"
+            )
+        },
+    )
 
 
 @app.route("/projects")
@@ -289,9 +414,9 @@ def import_file():
         os.remove(path)
         flash("Impossible de lire ce fichier. Vérifiez qu'il s'agit bien d'une version du fichier Excel « Project Financial Sheet » (.xlsx).", "danger")
         return redirect(url_for("import_form"))
-    os.remove(path)
 
     if not parsed:
+        os.remove(path)
         flash("Aucun projet détecté dans ce fichier.", "warning")
         return redirect(url_for("import_form"))
 
@@ -300,6 +425,13 @@ def import_file():
         client = Client(name=client_name)
         db.session.add(client)
         db.session.flush()
+
+    if not client.logo_path or not os.path.exists(client.logo_path):
+        try:
+            client.logo_path = extract_logo(path, LOGO_DIR, client.id)
+        except Exception:
+            pass
+    os.remove(path)
 
     created, updated, entries_added = 0, 0, 0
     for item in parsed:

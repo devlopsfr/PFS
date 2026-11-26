@@ -39,10 +39,20 @@
           <td class="text-end {{ 'text-danger fw-bold' if c.balance_uo < 0 else 'text-success' }}">{{ c.balance_uo }} j</td>
           <td class="text-end">{{ "%.0f"|format(c.consumed_eur) }} €</td>
           <td class="text-end">
-            <form method="post" action="{{ url_for('delete_client', client_id=c.id) }}"
-                  onsubmit="return confirm('Supprimer ce client ?')">
-              <button class="btn btn-outline-danger btn-sm">✕</button>
-            </form>
+            <div class="d-flex justify-content-end gap-1 align-items-center">
+              <a class="btn btn-outline-primary btn-sm" href="{{ url_for('client_synthese', client_id=c.id) }}">Synthèse</a>
+              {% if c.logo_path %}
+              <img src="{{ url_for('client_logo', client_id=c.id) }}" alt="" style="max-height: 22px; max-width: 80px;">
+              {% endif %}
+              <form method="post" action="{{ url_for('upload_logo', client_id=c.id) }}" enctype="multipart/form-data" class="d-flex gap-1">
+                <input type="file" name="logo" accept=".png,.jpg,.jpeg" class="form-control form-control-sm" style="max-width: 160px;" required>
+                <button class="btn btn-outline-secondary btn-sm" title="Définir le logo">Logo</button>
+              </form>
+              <form method="post" action="{{ url_for('delete_client', client_id=c.id) }}"
+                    onsubmit="return confirm('Supprimer ce client ?')">
+                <button class="btn btn-outline-danger btn-sm">✕</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% endfor %}

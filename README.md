@@ -12,6 +12,8 @@ Docker.
 - Consommation mensuelle par projet (jours), soldes et alertes de dépassement
 - Tableau de bord : KPI globaux, graphique mensuel, suivi par client, projets en alerte
 - **Import de vos fichiers Excel existants** (feuilles de type « Project Financial Sheet »)
+- **Synthèse par client** fidèle au fichier Excel (mêmes couleurs, logo du client extrait automatiquement du fichier importé), avec choix de l'année
+- **Export PDF de la synthèse** tenant sur une page (paysage A4)
 - Interface en français, responsive (Bootstrap 5)
 
 ## Utilisation sur votre PC (sans Docker)
